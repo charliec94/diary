@@ -18,7 +18,7 @@ Use `unraid/diary.xml` as the template, or enter these settings under **Docker â
 | Timezone | `America/Los_Angeles` |
 | Restart policy | `unless-stopped` |
 
-SQLite stores writing, attachments, and authentication at `/data/journal/journal.sqlite`. Tailscale state is separate at `/data/.tailscale_state`. Keep the Unraid `appdata` share on the cache pool and back it up.
+SQLite stores writing and attachments at `/data/journal/journal.sqlite`. Tailscale state is separate at `/data/.tailscale_state`. Keep the Unraid `appdata` share on the cache pool and back it up.
 
 To install the template manually, copy `unraid/diary.xml` to `/boot/config/plugins/dockerMan/templates-user/my-diary.xml`, then choose it in **Add Container**. Review the values before applying. If the repository is private, copy from your authenticated checkout; raw GitHub URLs may require authentication.
 
@@ -28,7 +28,7 @@ If GHCR reports `denied`, sign Unraid into `ghcr.io` with a GitHub token scoped 
 docker login ghcr.io -u charliec94
 ```
 
-Open `http://YOUR-UNRAID-IP:8083` and create your password on your trusted network. The first person to complete setup claims this single-owner journal. Your local preview and NAS have separate data and passwords.
+Open `http://YOUR-UNRAID-IP:8083` to begin writing directly. There is no password screen. Anyone who can reach the app can read and edit its journal; access is controlled through your network. Local preview data and NAS data are separate.
 
 ## Tailscale fixes carried forward
 
@@ -64,7 +64,7 @@ If Serve reports `No serve config`, restore it:
 docker exec -u 0 diary tailscale serve --bg http://127.0.0.1:3000
 ```
 
-Open the printed HTTPS address from your tailnet without appending `8083`. After switching exclusively to HTTPS, set `COOKIE_SECURE=true`; HTTP LAN sign-in then stops working. If a reverse proxy rewrites Host and saving returns `Request not allowed`, set `APP_ORIGIN` to the exact browser origin, for example `https://diary.your-tailnet.ts.net`.
+Open the printed HTTPS address from your tailnet without appending `8083`. If a reverse proxy rewrites Host and saving returns `Request not allowed`, set `APP_ORIGIN` to the exact browser origin, for example `https://diary.your-tailnet.ts.net`.
 
 After updates, check data persistence, health, Tailscale connectivity, Serve's port, and that Funnel remains disabled.
 
@@ -86,6 +86,10 @@ For a published image, run `docker compose pull`, then `docker compose up -d --n
 
 ## Backup and restore
 
-Stop `diary`, back up the complete `/mnt/user/appdata/diary` directory, then restart. Backups contain writing, attachment bytes, password hash, sessions, and Tailscale identity; protect them as private data. Restore to the same mapped path with the container stopped. Avoid running two copies of the same Tailscale identity.
+Stop `diary`, back up the complete `/mnt/user/appdata/diary` directory, then restart. Backups contain writing, attachment bytes, any unused legacy authentication tables, and Tailscale identity; protect them as private data. Restore to the same mapped path with the container stopped. Avoid running two copies of the same Tailscale identity.
 
 **Export writing** downloads entries and attachment metadata as JSON. It is not a full backup and excludes attachment bytes. Download individual files or use the directory backup for complete restoration.
+
+## Upgrading to the minimal dark version
+
+Pull the new image and keep the existing `/data` mount. No journal migration or password is required. The app no longer uses `COOKIE_SECURE`; remove that old setting if present. The Unraid/Tailscale ports and state directory are unchanged.

@@ -17,8 +17,8 @@ start() {
 start
 docker exec "$container" sh -c 'test "$(awk '\''/^Uid:/{print $2}'\'' /proc/1/status)" = 99'
 docker exec "$container" wget -q --spider http://127.0.0.1:3000/health
-docker exec "$container" node --input-type=module -e 'const r=await fetch("http://localhost:3000/api/setup",{method:"POST",headers:{"Content-Type":"application/json","X-Journal-Request":"1"},body:JSON.stringify({password:"ci-only-fixture-password"})});if(r.status!==200)process.exit(1)'
+docker exec "$container" node --input-type=module -e 'const r=await fetch("http://localhost:3000/api/entries",{method:"POST",headers:{"Content-Type":"application/json","X-Journal-Request":"1"},body:JSON.stringify({title:"CI persistence fixture",content:"Container test",section:"journal",date:"2026-09-09"})});if(r.status!==201)process.exit(1)'
 docker rm -f "$container" >/dev/null
 start
-docker exec "$container" node --input-type=module -e 'const r=await fetch("http://localhost:3000/api/status");const s=await r.json();if(!s.configured)process.exit(1)'
+docker exec "$container" node --input-type=module -e 'const r=await fetch("http://localhost:3000/api/entries");const s=await r.json();if(r.status!==200||s.length!==1||s[0].title!=="CI persistence fixture")process.exit(1)'
 echo 'Container health, non-root app, and persistence passed.'

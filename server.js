@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,6 @@ import { sections, chapters } from './public/sections.js';
 const root = path.dirname(fileURLToPath(import.meta.url));
 const allowedSections = new Set(sections.map(s => s.id));
 const MAX_FILE = 25 * 1024 * 1024;
-const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 function text(value, max, label, required = false) {
   if (typeof value !== 'string' || value.length > max || (required && !value.trim())) throw fail(400, `Check ${label}.`);
@@ -50,18 +49,16 @@ function mediaType(data, name) {
   throw fail(415, 'Use JPG, PNG, GIF, WebP, MP3, M4A, WAV, OGG, MP4, WebM, PDF, TXT, or Markdown.');
 }
 
-export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root, 'data'), secureCookies = process.env.COOKIE_SECURE === 'true', appOrigin = process.env.APP_ORIGIN || '' } = {}) {
+export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root, 'data'), appOrigin = process.env.APP_ORIGIN || '' } = {}) {
   mkdirSync(dataDir, { recursive: true });
   const db = new DatabaseSync(path.join(dataDir, 'journal.sqlite'), { timeout: 5000 });
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL, section TEXT NOT NULL, date TEXT NOT NULL, chapter TEXT NOT NULL, mood TEXT NOT NULL, tags TEXT NOT NULL, favorite INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL, updated TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE, name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL);
     CREATE INDEX IF NOT EXISTS attachments_entry ON attachments(entry_id);
     CREATE INDEX IF NOT EXISTS entries_date ON entries(date);`);
-  const configured = () => Boolean(db.prepare("SELECT value FROM settings WHERE key='password'").get());
-  const attempts = new Map();
+  // Legacy authentication tables are left untouched for non-destructive upgrades.
+  // Access is now controlled by the network; no password or session is required.
   const staticFiles = new Map([['/', ['index.html', 'text/html']], ['/app.js', ['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/sections.js',['sections.js','text/javascript']], ['/favicon.svg',['favicon.svg','image/svg+xml']]].map(([url,[file,type]]) => [url,{ data: readFileSync(path.join(root,'public',file)), type }]));
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -85,42 +82,7 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
           if (appOrigin ? origin.origin !== new URL(appOrigin).origin : origin.host !== req.headers.host) throw fail(403, 'Request not allowed.');
         }
       }
-      db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now());
-      const cookie = /(?:^|;\s*)journal_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || '')?.[1];
-      const authenticated = Boolean(cookie && db.prepare('SELECT token FROM sessions WHERE token=?').get(hash(cookie)));
-      if (route === '/api/status' && req.method === 'GET') return send(200, { configured: configured(), authenticated });
-      if (['/api/setup','/api/login'].includes(route) && req.method === 'POST') {
-        const ip = req.socket.remoteAddress;
-        const now = Date.now();
-        for (const [key, value] of attempts) if (value.expires < now) attempts.delete(key);
-        const record = attempts.get(ip) || { count: 0, expires: now + 15 * 60 * 1000 };
-        if (record.count >= 10 || attempts.size > 10000) throw fail(429, 'Too many attempts. Try again in 15 minutes.');
-        record.count++; attempts.set(ip, record);
-        const body = await jsonBody(req);
-        const password = text(body.password, 256, 'the password', true);
-        if (route === '/api/setup') {
-          if (configured()) throw fail(409, 'The journal already has a password. Sign in instead.');
-          if (password.length < 12) throw fail(400, 'Use at least 12 characters.');
-          const salt = randomBytes(16).toString('hex');
-          db.prepare("INSERT INTO settings VALUES ('password', ?)").run(salt + ':' + scryptSync(password, salt, 64).toString('hex'));
-        } else {
-          const stored = db.prepare("SELECT value FROM settings WHERE key='password'").get()?.value;
-          if (!stored) throw fail(409, 'Set up your journal first.');
-          const [salt, expected] = stored.split(':');
-          if (!timingSafeEqual(scryptSync(password, salt, 64), Buffer.from(expected,'hex'))) throw fail(401, 'That password did not match.');
-        }
-        attempts.delete(ip);
-        const token = randomBytes(32).toString('hex');
-        db.prepare('INSERT INTO sessions VALUES (?,?)').run(hash(token), now + 7 * 86400000);
-        res.setHeader('Set-Cookie', `journal_session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=604800${secureCookies ? '; Secure' : ''}`);
-        return send(200, { ok: true });
-      }
-      if (!authenticated) throw fail(401, 'Please sign in to your journal.');
-      if (route === '/api/logout' && req.method === 'POST') {
-        db.prepare('DELETE FROM sessions WHERE token=?').run(hash(cookie));
-        res.setHeader('Set-Cookie', `journal_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureCookies ? '; Secure' : ''}`);
-        return send(200, { ok: true });
-      }
+      if (route === '/api/status' && req.method === 'GET') return send(200, { authentication: false });
       if (route === '/api/entries' && req.method === 'GET') {
         const rows = db.prepare('SELECT entries.*, (SELECT COUNT(*) FROM attachments WHERE entry_id=entries.id) AS attachment_count, (SELECT id FROM attachments WHERE entry_id=entries.id AND type LIKE \'image/%\' LIMIT 1) AS cover FROM entries ORDER BY date DESC, created DESC').all();
         return send(200, rows);
