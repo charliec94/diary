@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <Name>diary</Name>
+  <Repository>ghcr.io/charliec94/diary:latest</Repository>
+  <Registry>https://github.com/charliec94/diary/pkgs/container/diary</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/charliec94/diary/issues</Support>
+  <Project>https://github.com/charliec94/diary</Project>
+  <Overview>Charlie - Life Journal. Password-protected writing, life chapters, prompts, photos, voice notes, and memories. Complete first-run password setup on your trusted network. Enable Unraid Tailscale Serve for private HTTPS access; leave Funnel disabled.</Overview>
+  <Category>Productivity:</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/charliec94/diary/main/unraid/diary.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/charliec94/diary/main/public/favicon.svg</Icon>
+  <TailscaleEnabled>true</TailscaleEnabled>
+  <TailscaleHostname>diary</TailscaleHostname>
+  <TailscaleIsExitNode>false</TailscaleIsExitNode>
+  <TailscaleSSH>false</TailscaleSSH>
+  <TailscaleUserspaceNetworking>true</TailscaleUserspaceNetworking>
+  <TailscaleServe>serve</TailscaleServe>
+  <TailscaleServePort>3000</TailscaleServePort>
+  <TailscaleWebUI>https://[hostname][magicdns]/</TailscaleWebUI>
+  <TailscaleStateDir>/data/.tailscale_state</TailscaleStateDir>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <Config Name="Web UI Port" Target="3000" Default="8083" Mode="tcp" Description="Host port. The container and Tailscale Serve use internal port 3000." Type="Port" Display="always" Required="true" Mask="false">8083</Config>
+  <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/diary" Mode="rw" Description="Persistent journal, attachments, password, and Tailscale state. Keep this share on your cache pool." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/diary</Config>
+  <Config Name="App User ID" Target="PUID" Default="99" Mode="" Description="Unraid nobody UID. Startup drops app privileges after the Tailscale hook." Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="App Group ID" Target="PGID" Default="100" Mode="" Description="Unraid users GID." Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="Timezone" Target="TZ" Default="America/Los_Angeles" Mode="" Description="Container timezone." Type="Variable" Display="advanced" Required="true" Mask="false">America/Los_Angeles</Config>
+  <Config Name="HTTPS-only cookies" Target="COOKIE_SECURE" Default="false" Mode="" Description="Set true after switching exclusively to Tailscale HTTPS; HTTP LAN login then stops working." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="Canonical app origin" Target="APP_ORIGIN" Default="" Mode="" Description="Optional exact HTTPS origin if a reverse proxy rewrites Host. Otherwise leave blank." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>

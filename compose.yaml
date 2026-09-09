@@ -1,0 +1,17 @@
+services:
+  diary:
+    image: ghcr.io/charliec94/diary:latest
+    build: .
+    container_name: diary
+    restart: unless-stopped
+    ports:
+      - "${DIARY_PORT:-8083}:3000"
+    environment:
+      PUID: "${PUID:-99}"
+      PGID: "${PGID:-100}"
+      TZ: "${TZ:-America/Los_Angeles}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      APP_ORIGIN: "${APP_ORIGIN:-}"
+    volumes:
+      - "${DIARY_DATA_PATH:-./data}:/data"
+    # Per-container Tailscale is configured in Unraid's UI, not by Compose.
