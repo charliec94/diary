@@ -106,9 +106,9 @@ function topicOptions(selected=''){$('#entry-topic').innerHTML='<option value=""
 function entryPayload(){return{title:$('#entry-title').value,content:$('#entry-content').value,section:$('#entry-section').value,topic:$('#entry-topic').value||'',date:$('#entry-date').value,chapter:$('#entry-chapter').value,mood:$('#entry-mood').value,tags:$('#entry-tags').value,favorite:$('#entry-favorite').checked};}
 function saveState(state){
   dirty=state.dirty;editing=state.entry||editing;
-  const labels={pending:'Waiting to save…',saving:'Saving…',saved:'Saved to journal',draft:state.recoverable?'Draft on this device':'Not saved yet',error:state.recoverable?'Draft on this device':'Not saved',conflict:'Draft on this device'};
+  const labels={pending:'Waiting to save…',saving:'Saving…',saved:'Saved to journal',draft:state.recoverable?'Draft on this device':'Not saved yet',error:state.recoverable?'Draft on this device':'Not saved',conflict:state.recoverable?'Draft on this device':'Not saved'};
   $('#save-status').textContent=labels[state.status];
-  $('#editor-error').textContent=state.status==='error'?(state.error?.status>=400&&state.error?.status<500?state.error.message:state.recoverable?'Could not reach your journal. Your writing is kept on this device; retrying automatically.': 'Could not save or keep a recovery copy. Keep this page open and copy your writing.') : state.status==='conflict'?(state.error?.message||'This entry changed elsewhere. Your draft is kept for recovery.') : '';
+  $('#editor-error').textContent=state.status==='error'?(state.error?.status>=400&&state.error?.status<500?state.error.message:state.recoverable?'Could not reach your journal. Your writing is kept on this device; retrying automatically.': 'Could not save or keep a recovery copy. Keep this page open and copy your writing.') : state.status==='conflict'?(state.recoverable?(state.error?.message||'This entry changed elsewhere. Your draft is kept for recovery.'):'This entry changed elsewhere and browser recovery is unavailable. Keep this page open and copy your writing.') : '';
   $('#delete-entry').hidden=!editing;$('#upload').disabled=busy||!editing;
   if(editing)$('#upload-help').textContent='Photos, voice notes, videos, or documents. Up to 25 MB each; 20 attachments per entry.';
   if(state.status==='saved')renderRecovery();
