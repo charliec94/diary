@@ -93,3 +93,7 @@ Stop `diary`, back up the complete `/mnt/user/appdata/diary` directory, then res
 ## Upgrading to the minimal dark version
 
 Pull the new image and keep the existing `/data` mount. No journal migration or password is required. The app no longer uses `COOKIE_SECURE`; remove that old setting if present. The Unraid/Tailscale ports and state directory are unchanged.
+
+## Autosave storage
+
+Autosaved entries and their outline topics use the same journal database under `/data`. No automatic backup job is added; use your existing Unraid appdata backup. Browser recovery copies contain only unfinished writing awaiting sync and are not part of NAS backups until saved to the server. Keep the existing appdata mount when updating to this version.

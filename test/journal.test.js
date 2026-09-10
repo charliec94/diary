@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
+import { randomUUID } from 'node:crypto';
 import { createJournal } from '../server.js';
 import { sections } from '../public/sections.js';
 
@@ -53,6 +54,19 @@ test('password-free journal, writing, memories, and persistence', async t => {
     const stale=await request(`/api/entries/${entry.id}`,'PUT',{...fixture,updated:'stale-version'});assert.equal(stale.status,409);
     assert.equal((await (await request(`/api/entries/${entry.id}`)).json()).content,'An updated memory.');
   });
+  await t.test('autosave retries are idempotent and outline topics persist', async () => {
+    const id=randomUUID();const create={...fixture,id,topic:'How we met',mutation_id:randomUUID()};
+    const created=await request('/api/entries','POST',create);assert.equal(created.status,201);let row=await created.json();
+    const replay=await request('/api/entries','POST',create);assert.equal(replay.status,200);assert.equal((await replay.json()).updated,row.updated);
+    assert.equal((await (await request('/api/entries')).json()).filter(e=>e.id===id).length,1);
+    assert.equal((await request('/api/entries','POST',{...create,content:'A conflicting create'})).status,409);
+    const edit={...create,content:'A newer autosave',updated:row.updated,mutation_id:randomUUID()};
+    const response=await request(`/api/entries/${id}`,'PUT',edit);assert.equal(response.status,200);row=await response.json();assert.equal(row.topic,'How we met');
+    const again=await request(`/api/entries/${id}`,'PUT',edit);assert.equal(again.status,200);assert.equal((await again.json()).updated,row.updated);
+    assert.equal((await request(`/api/entries/${id}`,'PUT',{...edit,updated:row.updated,topic:'Spain',mutation_id:randomUUID()})).status,400);
+    assert.equal((await request(`/api/entries/${id}`,'PUT',{...edit,content:'Stale overwrite',mutation_id:randomUUID()})).status,409);
+    await request(`/api/entries/${id}`,'DELETE');
+  });
   await t.test('uploads are typed by bytes; unsupported active content is blocked', async () => {
     const svg=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
     assert.equal((await request(`/api/entries/${entry.id}/attachments`,'POST',svg,{'X-File-Name':'fake.png','Content-Type':'image/png'})).status,415);
@@ -82,4 +96,14 @@ test('password-free journal, writing, memories, and persistence', async t => {
     assert.equal((await (await request('/api/entries')).json()).length,0);
   });
 
+});
+
+test('upgrading the original schema keeps existing writing and adds empty topics',async t=>{
+  const dataDir=mkdtempSync(path.join(tmpdir(),'diary-upgrade-'));
+  const legacy=new DatabaseSync(path.join(dataDir,'journal.sqlite'));
+  legacy.exec('CREATE TABLE entries (id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL, section TEXT NOT NULL, date TEXT NOT NULL, chapter TEXT NOT NULL, mood TEXT NOT NULL, tags TEXT NOT NULL, favorite INTEGER NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL)');
+  const id=randomUUID();legacy.prepare('INSERT INTO entries VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(id,'Existing writing','Keep this text','me','2025-09-10','','','',0,'2025-09-10T00:00:00.000Z','2025-09-10T00:00:00.000Z');legacy.close();
+  const server=createJournal({dataDir});server.listen(0,'127.0.0.1');await once(server,'listening');
+  t.after(async()=>{const closed=once(server,'close');server.close();server.closeAllConnections();await closed;rmSync(dataDir,{recursive:true,force:true});});
+  const response=await fetch(`http://127.0.0.1:${server.address().port}/api/entries/${id}`);assert.equal(response.status,200);const row=await response.json();assert.equal(row.content,'Keep this text');assert.equal(row.topic,'');assert.equal(row.updated,'2025-09-10T00:00:00.000Z');
 });

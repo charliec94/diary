@@ -19,9 +19,11 @@ function validateEntry(body) {
   const content = text(body.content, 200000, 'the entry');
   if (!allowedSections.has(body.section)) throw fail(400, 'Choose a section.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date) || Number.isNaN(Date.parse(body.date)) || new Date(body.date).toISOString().slice(0,10) !== body.date) throw fail(400, 'Choose a valid date.');
+  const topic = text(body.topic || '', 200, 'the outline topic');
+  if (topic && !sections.find(s => s.id === body.section).prompts.includes(topic)) throw fail(400, 'Choose a topic from this section.');
   if (body.chapter && !chapters.includes(body.chapter)) throw fail(400, 'Choose a life chapter.');
   if (body.mood && !['Great', 'Good', 'Okay', 'Low', 'Difficult'].includes(body.mood)) throw fail(400, 'Choose a mood.');
-  return { title, content, section: body.section, date: body.date, chapter: body.chapter || '', mood: body.mood || '', tags: text(body.tags || '', 300, 'the tags'), favorite: body.favorite === true ? 1 : 0 };
+  return { title, content, topic, section: body.section, date: body.date, chapter: body.chapter || '', mood: body.mood || '', tags: text(body.tags || '', 300, 'the tags'), favorite: body.favorite === true ? 1 : 0 };
 }
 async function readBody(req, max) {
   if (Number(req.headers['content-length']) > max) throw fail(413, 'This file is too large. Maximum: 25 MB.');
@@ -57,9 +59,18 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
     CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE, name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL);
     CREATE INDEX IF NOT EXISTS attachments_entry ON attachments(entry_id);
     CREATE INDEX IF NOT EXISTS entries_date ON entries(date);`);
+  const columns = new Set(db.prepare('PRAGMA table_info(entries)').all().map(column => column.name));
+  if (!columns.has('topic')) db.exec("ALTER TABLE entries ADD COLUMN topic TEXT NOT NULL DEFAULT ''");
+  if (!columns.has('last_mutation')) db.exec("ALTER TABLE entries ADD COLUMN last_mutation TEXT NOT NULL DEFAULT ''");
+  const sameEntry = (row, value) => ['title','content','section','date','chapter','mood','tags','favorite','topic'].every(key => row[key] === value[key]);
+  function mutation(body) {
+    if (!body.mutation_id) return '';
+    if (typeof body.mutation_id !== 'string' || !/^[a-f0-9-]{36}$/.test(body.mutation_id)) throw fail(400, 'Invalid save identifier.');
+    return body.mutation_id;
+  }
   // Legacy authentication tables are left untouched for non-destructive upgrades.
   // Access is now controlled by the network; no password or session is required.
-  const staticFiles = new Map([['/', ['index.html', 'text/html']], ['/app.js', ['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/sections.js',['sections.js','text/javascript']], ['/favicon.svg',['favicon.svg','image/svg+xml']]].map(([url,[file,type]]) => [url,{ data: readFileSync(path.join(root,'public',file)), type }]));
+  const staticFiles = new Map([['/', ['index.html', 'text/html']], ['/app.js', ['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/sections.js',['sections.js','text/javascript']], ['/favicon.svg',['favicon.svg','image/svg+xml']], ['/journal-utils.js',['journal-utils.js','text/javascript']]].map(([url,[file,type]]) => [url,{ data: readFileSync(path.join(root,'public',file)), type }]));
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -92,10 +103,18 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
         return send(200, { version: 1, exported: new Date().toISOString(), entries: db.prepare('SELECT * FROM entries ORDER BY date').all(), attachments: db.prepare('SELECT id,entry_id,name,type,size FROM attachments').all(), note: 'Attachment files are not included. Download them individually or back up the entire data directory with the container stopped.' });
       }
       if (route === '/api/entries' && req.method === 'POST') {
-        const entry = validateEntry(await jsonBody(req));
-        const id = randomUUID(); const now = new Date().toISOString();
-        db.prepare('INSERT INTO entries (id,title,content,section,date,chapter,mood,tags,favorite,created,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(id, entry.title, entry.content, entry.section, entry.date, entry.chapter, entry.mood, entry.tags, entry.favorite, now, now);
-        return send(201, { id, ...entry, created: now, updated: now });
+        const body = await jsonBody(req);
+        const entry = validateEntry(body);
+        if (body.id !== undefined && (typeof body.id !== 'string' || !/^[a-f0-9-]{36}$/.test(body.id))) throw fail(400, 'Invalid entry identifier.');
+        const id = body.id || randomUUID(); const lastMutation = mutation(body);
+        const existing = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
+        if (existing) {
+          if (lastMutation && existing.last_mutation === lastMutation && sameEntry(existing,entry)) return send(200, existing);
+          throw fail(409, 'This entry already exists. Your draft has been kept for recovery.');
+        }
+        const now = new Date().toISOString();
+        db.prepare('INSERT INTO entries (id,title,content,section,date,chapter,mood,tags,favorite,created,updated,topic,last_mutation) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)').run(id, entry.title, entry.content, entry.section, entry.date, entry.chapter, entry.mood, entry.tags, entry.favorite, now, now, entry.topic, lastMutation);
+        return send(201, { id, ...entry, created: now, updated: now, last_mutation: lastMutation });
       }
       const match = /^\/api\/entries\/([a-f0-9-]{36})(\/attachments)?$/.exec(route);
       if (match) {
@@ -119,11 +138,15 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
         } else {
           if (req.method === 'GET') return send(200, entry);
           if (req.method === 'PUT') {
-            const body = await jsonBody(req); const next = validateEntry(body);
-            const updated = new Date().toISOString();
-            const result = db.prepare('UPDATE entries SET title=?,content=?,section=?,date=?,chapter=?,mood=?,tags=?,favorite=?,updated=? WHERE id=? AND updated=?').run(next.title,next.content,next.section,next.date,next.chapter,next.mood,next.tags,next.favorite,updated,entry.id,body.updated || '');
-            if (!result.changes) throw fail(409, 'This entry changed in another tab. Copy your changes before reopening it.');
-            return send(200, { ...entry, ...next, updated });
+            const body = await jsonBody(req); const next = validateEntry(body); const lastMutation = mutation(body);
+            // Re-read after receiving the request body to compare against the latest version.
+            const latest = db.prepare('SELECT * FROM entries WHERE id=?').get(entry.id);
+            if (!latest) throw fail(404, 'Entry was deleted. Your draft has been kept for recovery.');
+            if (lastMutation && latest.last_mutation === lastMutation && sameEntry(latest,next)) return send(200, latest);
+            const updated = new Date(Math.max(Date.now(), Date.parse(latest.updated) + 1)).toISOString();
+            const result = db.prepare('UPDATE entries SET title=?,content=?,section=?,date=?,chapter=?,mood=?,tags=?,favorite=?,topic=?,last_mutation=?,updated=? WHERE id=? AND updated=?').run(next.title,next.content,next.section,next.date,next.chapter,next.mood,next.tags,next.favorite,next.topic,lastMutation,updated,entry.id,body.updated || '');
+            if (!result.changes) throw fail(409, 'This entry changed elsewhere. Your draft is kept in this browser; reopen the latest entry before merging your changes.');
+            return send(200, { ...latest, ...next, updated, last_mutation: lastMutation });
           }
           if (req.method === 'DELETE') { db.prepare('DELETE FROM entries WHERE id=?').run(entry.id); return send(200, { ok: true }); }
         }

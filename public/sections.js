@@ -19,5 +19,5 @@ export const sections = [
   ['memories', 'Memories', '▧', ['Photos', 'Screenshots', 'Tickets', 'Letters', 'Voice notes', 'Videos', 'Random things worth remembering']],
   ['future', 'Future', '↗', ['Places I want to visit', 'Things I want to learn', 'Experiences I want to have', 'Relationships I want to nurture', 'Career goals', 'Financial goals', 'Person I want to become']],
   ['beliefs', 'Things I Believe', '✧', ['Life lessons', 'Quotes', 'Rules I live by', "Things I’ve changed my mind about", 'Advice to Future Charlie']]
-].map(([id, name, icon, prompts]) => ({ id, name, icon, prompts }));
+].map(([id, name, icon, prompts]) => ({ id, name, icon, prompts, subsections: id === 'travel' ? prompts.slice(0,4) : id === 'timeline' ? [...prompts] : [] }));
 export const chapters = ['Childhood', 'Teenage Years', '20s', 'Marriage', '2026 — Rebuilding', 'Future Chapters'];

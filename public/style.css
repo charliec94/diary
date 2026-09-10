@@ -138,3 +138,22 @@ body.modal-open{overflow:hidden}
   #attachments{grid-template-columns:1fr}.card-image{height:220px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Outline and recovery stay secondary to the writing surface. */
+.quiet-links{display:flex;gap:25px;margin:-28px 0 33px;font-size:14px;color:var(--muted)}
+.quiet-links a:hover,.outline-topic a:hover{color:var(--ink)}
+.topic-parent{display:inline-block;margin-top:16px;font-size:14px;color:var(--muted)}
+.outline-intro{color:var(--muted);font-family:Georgia,serif;font-size:18px;margin-top:-30px;margin-bottom:36px}
+.outline-tree>details{border-bottom:1px solid var(--line);padding:18px 0}
+.outline-tree>details>summary{font-family:Georgia,serif;font-size:23px;color:var(--ink);display:flex;align-items:center;gap:14px}
+.outline-tree>details>summary:after{font-family:Arial,sans-serif;font-size:17px;margin-left:5px}
+.outline-count{font:12px Arial,sans-serif;color:var(--muted);margin-left:auto}
+.outline-items{padding:19px 0 5px 18px;border-left:1px solid var(--line);margin-top:17px}
+.outline-all{font-size:13px;color:var(--muted);display:block;margin-bottom:12px}
+.outline-topic{display:flex;align-items:center;gap:16px;padding:7px 0;font-size:14px;color:#bbc2b2}
+.outline-topic a{flex:1;overflow-wrap:anywhere}.outline-topic button{padding:7px 10px;color:var(--muted)}
+.outline-subsection{font-family:Georgia,serif;font-size:19px;color:var(--ink)}
+.recovery-list{border:1px solid var(--line);padding:15px 18px;border-radius:5px;margin-bottom:24px}
+.recovery-row{display:flex;gap:16px;align-items:center;justify-content:space-between;padding-top:15px;font-size:14px}
+.recovery-row>button:first-child{text-align:left;overflow-wrap:anywhere;padding:0}
+@media(max-width:700px){.quiet-links{margin:-16px 0 28px}.outline-intro{margin-top:-20px}.outline-tree>details>summary{font-size:22px}.recovery-row{align-items:flex-start}.recovery-row .danger-quiet{flex-shrink:0}}

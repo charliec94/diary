@@ -8,3 +8,7 @@
 - Run node --test and the package build script for code changes. Validate container changes with Docker or GitHub Actions.
 - Preserve the minimal dark writing-first design; keep optional controls collapsed.
 - Do not seed personal claims. Use temporary synthetic data for tests.
+
+- Preserve the Markdown outline’s section/topic ordering. Keep the original personal Markdown file local. Existing entries without a topic remain general entries.
+- Autosave must serialize requests, preserve pending writes for recovery, and use idempotent mutation IDs plus version checks. Never silently overwrite conflicts.
+- Do not add automatic backups; the user’s Unraid appdata backup already handles saved data.
