@@ -51,7 +51,7 @@ GitHub Actions builds Linux amd64 for Unraid, runs app tests and container check
 
 ## Privacy and limits
 
-There is no app password: anyone who can reach its network address can read and edit the journal. Access is managed through your LAN/Tailscale network. Stored data and backups are **not encrypted at rest**. This is a single-owner journal without invitations, cloud sync, transcription, or an import interface. Media playback depends on browser codec support. Lists are loaded into memory for search, appropriate for a personal journal rather than a large multi-user archive.
+There is no app password: anyone who can reach its network address can read and edit the journal. Access is managed through your LAN/Tailscale network. Stored data and backups are **not encrypted at rest**. This is a single-owner journal without invitations, cloud sync, or transcription. Media playback depends on browser codec support. Lists are loaded into memory for search, appropriate for a personal journal rather than a large multi-user archive.
 
 The optional WebMCP tool `start_journal_entry` opens an editor in supporting browsers. Opening alone does not save; subsequent typing follows the same autosave flow. Browsers without that proposed API work normally.
 
@@ -72,3 +72,13 @@ While a save is pending, unfinished writing is also retained in this browser’s
 **Life outline** preserves the original ordering and distinguishes Travel destinations and Life Timeline chapter headings. Expand a section to browse a topic or press its plus button to write there. **Entry details → Outline topic** files existing entries without changing their text. Older entries retain their sections as general entries until you choose a topic. The source Markdown file stays local; the app preserves its section/topic structure.
 
 Autosave uses serialized writes, version checks, and idempotent mutation IDs so retries after lost responses do not duplicate entries. Upgrades add only `topic` and `last_mutation` columns; existing writing and dates are preserved. Tests cover debounce, in-flight edits, response-loss recovery, conflicts, validation recovery, topic migration, and calendar matching.
+
+## Writing view and Markdown
+
+Entries open as a full-page writing sheet with a centered column and an expanding writing area. **Formatting** offers bold, italic, headings, lists, and quotes; Markdown marks remain visible while editing. Formatting uses the same autosave and recovery path as typing.
+
+Open **Navigation → Import & export** to download Markdown or import a local file. Exports preserve all 20 sections and topics in their original order, with writing and entry metadata inside fenced blocks. Keep the metadata comments and fences intact for a round trip. Attachment bytes are not included; they remain in appdata.
+
+Import shows an expandable preview before anything is saved. The original outline's section headings and topic bullets are recognized, including emoji and straight/curly apostrophes. Empty prompts create no entries. Unrecognized headings are retained as general writing in the current section. Choose a date for plain Markdown without date metadata. Journal exports retain their original dates, moods, tags, favorites, chapters, and topics. Imports add entries and never overwrite existing writing. Identical entries are skipped, and retries of the same request are safe even after a lost response. Limits: 2 MB per file, 500 entries per import, and the existing per-entry limits.
+
+Original Markdown files stay on your device unless you explicitly select them for import. Import sends parsed writing to your own journal server and stores it in the existing appdata database. No source documents or real writing belong in Git.

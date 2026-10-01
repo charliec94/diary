@@ -1,3 +1,4 @@
+import { parseMarkdown, formatSelection } from './markdown.js';
 import { sections, chapters } from './sections.js';
 import { onThisDay, newId, createDraftStore, createAutosaver } from './journal-utils.js';
 const $ = selector => document.querySelector(selector);
@@ -121,12 +122,13 @@ async function openEditor(entry=null,section='journal',prompt='',chapter='',topi
   $('#editor-label').textContent=entry?formatDate(entry.date):'New entry';$('#delete-entry').hidden=!entry;$('#upload').disabled=!entry;$('#upload-help').textContent=entry?'Photos, voice notes, videos, or documents. Up to 25 MB each; 20 attachments per entry.':'Start writing to autosave your entry, then add attachments.';$('#save-status').textContent=entry?'Saved to journal':'Autosave is on';wordCount();editorPrompts();
   draftKey=recovery?.key||newId();
   saver=createAutosaver({initial:entryPayload(),entry,targetId:entry?.id||newId(),draftKey,restored:recovery,store:draftStore,uuid:newId,request:(url,options)=>api(url,{...options,signal:AbortSignal.timeout(20000)}),onState:saveState,onSaved(result){editing=result;const old=entries.find(e=>e.id===result.id);const row={...old,...result,attachment_count:old?.attachment_count||0,cover:old?.cover||null};entries=entries.filter(e=>e.id!==result.id);entries.push(row);render();}});
-  $('#editor').showModal();document.body.classList.add('modal-open');
+  $('#editor').showModal();document.body.classList.add('modal-open');resizeWriting();
   if(recovery)saver.resume();
   if(prompt||recovery)$('#entry-content').focus();else $('#entry-title').focus();
   if(entry)try{await loadAttachments();}catch(error){$('#editor-error').textContent=error.message;}
 }
-function wordCount(){const value=$('#entry-content').value.trim();$('#word-count').textContent=`${value?value.split(/\s+/).length:0} words`;}
+function resizeWriting(){const field=$('#entry-content');field.style.height='auto';field.style.height=`${field.scrollHeight}px`;}
+function wordCount(){resizeWriting();const value=$('#entry-content').value.trim();$('#word-count').textContent=`${value?value.split(/\s+/).length:0} words`;}
 function changed(){wordCount();saver?.update(entryPayload());}
 $('#entry-form').addEventListener('input',event=>{if(event.target.id!=='upload'&&event.target.id!=='entry-section')changed();});
 $('#entry-section').addEventListener('change',()=>{topicOptions();editorPrompts();changed();});
@@ -175,3 +177,58 @@ if(document.modelContext?.registerTool){
   try{Promise.resolve(document.modelContext.registerTool({name:'start_journal_entry',title:'Start a journal entry',description:'Open a journal editor. Typing autosaves to the journal; opening alone does not save.',inputSchema:{type:'object',properties:{section:{type:'string',enum:sections.map(s=>s.id)},prompt:{type:'string',maxLength:200}},required:['section'],additionalProperties:false},annotations:{readOnlyHint:false,untrustedContentHint:false},async execute(input){if(!input||!sections.some(s=>s.id===input.section)||('prompt'in input&&(typeof input.prompt!=='string'||input.prompt.length>200)))throw new Error('Invalid section or prompt.');if($('#editor').open)throw new Error('Close the current entry first.');await openEditor(null,input.section,input.prompt||'');return{status:'editor_open',saved:false};}},{signal:lifecycle.signal})).catch(()=>{});}catch{}
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }
+
+// Formatting edits use the same autosave and browser recovery flow as typing.
+$('.format-buttons').addEventListener('click',event=>{
+  const button=event.target.closest('[data-format]');if(!button)return;
+  const field=$('#entry-content');
+  const {replacement,start,end}=formatSelection(field.value,field.selectionStart,field.selectionEnd,button.dataset.format);
+  if(field.value.length-(end-start)+replacement.length>field.maxLength){toast('This entry has reached its length limit.');return;}
+  field.setRangeText(replacement,start,end,'select');field.focus();changed();
+});
+window.addEventListener('resize',()=>{if($('#editor').open)resizeWriting();});
+let importSource='', importBatch=null, importReading=0;
+function previewImport(){
+  importBatch=null;$('#confirm-import').disabled=true;$('#import-error').textContent='';$('#import-preview').textContent='';
+  if(!importSource)return;
+  try{
+    if(!$('#import-date').checkValidity())throw new Error('Choose a date for undated writing.');
+    const parsed=parseMarkdown(importSource,$('#import-date').value);
+    importBatch={id:newId(),entries:parsed.entries};
+    $('#import-preview').innerHTML=parsed.entries.length?
+      '<p>'+parsed.entries.length+' entries ready to import.</p>'+parsed.warnings.map(w=>'<p class="muted">'+esc(w)+'</p>').join('')+
+      parsed.entries.map(e=>'<details class="import-entry"><summary>'+esc(e.title)+'</summary><p class="muted">'+esc(sectionById(e.section).name)+(e.topic?' / '+esc(e.topic):'')+' · '+esc(e.date)+'</p><pre>'+esc(e.content)+'</pre></details>').join(''):
+      '<p>This file contains an outline with no writing yet. Your journal already has these sections and topics; no blank entries will be created.</p>';
+    $('#confirm-import').disabled=!parsed.entries.length;
+  }catch(error){$('#import-error').textContent=error.message;}
+}
+$('#open-import').addEventListener('click',()=>{
+  setNavigation(false);$('#import-date').value=localDate();$('#import-file').value='';importSource='';previewImport();
+  $('#import-dialog').showModal();document.body.classList.add('modal-open');
+});
+function closeImport(){if(busy)return;importReading++;$('#import-dialog').close();document.body.classList.remove('modal-open');}
+$('#close-import').addEventListener('click',closeImport);
+$('#import-dialog').addEventListener('cancel',event=>{event.preventDefault();closeImport();});
+$('#import-date').addEventListener('change',previewImport);
+$('#import-file').addEventListener('change',async event=>{
+  const generation=++importReading;const file=event.target.files[0];importSource='';previewImport();
+  if(!file)return;
+  try{
+    if(file.size>2_000_000)throw new Error('Choose a Markdown file under 2 MB.');
+    const source=await file.text();if(generation!==importReading)return;
+    if(source.includes('\0'))throw new Error('Choose a plain-text Markdown file.');
+    importSource=source;previewImport();
+  }catch(error){if(generation===importReading)$('#import-error').textContent=error.message;}
+});
+$('#confirm-import').addEventListener('click',async()=>{
+  if(!importBatch?.entries.length||busy)return;
+  busy=true;for(const id of ['confirm-import','import-file','import-date','close-import'])$('#'+id).disabled=true;
+  $('#import-error').textContent='';
+  try{
+    const result=await api('/api/import',{method:'POST',body:JSON.stringify(importBatch),signal:AbortSignal.timeout(30000)});
+    importBatch=null;importSource='';busy=false;closeImport();
+    toast(result.added+' entries imported'+(result.skipped?' · '+result.skipped+' already present':'')+'.');
+    try{entries=await api('/api/entries');render();}catch{toast('Import saved. Refresh the page to see your entries.');}
+  }catch(error){$('#import-error').textContent=error.message+' You can retry this import safely.';}
+  finally{busy=false;for(const id of ['import-file','import-date','close-import'])$('#'+id).disabled=false;$('#confirm-import').disabled=!importBatch?.entries.length;}
+});

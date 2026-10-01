@@ -1,10 +1,11 @@
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sections, chapters } from './public/sections.js';
+import { exportMarkdown } from './public/markdown.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const allowedSections = new Set(sections.map(s => s.id));
@@ -31,9 +32,9 @@ async function readBody(req, max) {
   for await (const part of req) { length += part.length; if (length > max) throw fail(413, 'Request is too large.'); parts.push(part); }
   return Buffer.concat(parts);
 }
-async function jsonBody(req) {
+async function jsonBody(req, max = 1024 * 1024) {
   if (!req.headers['content-type']?.startsWith('application/json')) throw fail(415, 'Expected JSON.');
-  try { const result = JSON.parse((await readBody(req, 1024 * 1024)).toString()); if (!result || typeof result !== 'object' || Array.isArray(result)) throw fail(400, 'Invalid request.'); return result; }
+  try { const result = JSON.parse((await readBody(req, max)).toString()); if (!result || typeof result !== 'object' || Array.isArray(result)) throw fail(400, 'Invalid request.'); return result; }
   catch (error) { if (error.status) throw error; throw fail(400, 'Invalid JSON.'); }
 }
 function mediaType(data, name) {
@@ -58,6 +59,7 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
     CREATE TABLE IF NOT EXISTS entries (id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL, section TEXT NOT NULL, date TEXT NOT NULL, chapter TEXT NOT NULL, mood TEXT NOT NULL, tags TEXT NOT NULL, favorite INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL, updated TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE, name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, data BLOB NOT NULL);
     CREATE INDEX IF NOT EXISTS attachments_entry ON attachments(entry_id);
+    CREATE TABLE IF NOT EXISTS imports (id TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS entries_date ON entries(date);`);
   const columns = new Set(db.prepare('PRAGMA table_info(entries)').all().map(column => column.name));
   if (!columns.has('topic')) db.exec("ALTER TABLE entries ADD COLUMN topic TEXT NOT NULL DEFAULT ''");
@@ -70,7 +72,7 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
   }
   // Legacy authentication tables are left untouched for non-destructive upgrades.
   // Access is now controlled by the network; no password or session is required.
-  const staticFiles = new Map([['/', ['index.html', 'text/html']], ['/app.js', ['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/sections.js',['sections.js','text/javascript']], ['/favicon.svg',['favicon.svg','image/svg+xml']], ['/journal-utils.js',['journal-utils.js','text/javascript']]].map(([url,[file,type]]) => [url,{ data: readFileSync(path.join(root,'public',file)), type }]));
+  const staticFiles = new Map([['/', ['index.html', 'text/html']], ['/app.js', ['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/sections.js',['sections.js','text/javascript']], ['/favicon.svg',['favicon.svg','image/svg+xml']], ['/journal-utils.js',['journal-utils.js','text/javascript']], ['/markdown.js',['markdown.js','text/javascript']]].map(([url,[file,type]]) => [url,{ data: readFileSync(path.join(root,'public',file)), type }]));
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -97,6 +99,37 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
       if (route === '/api/entries' && req.method === 'GET') {
         const rows = db.prepare('SELECT entries.*, (SELECT COUNT(*) FROM attachments WHERE entry_id=entries.id) AS attachment_count, (SELECT id FROM attachments WHERE entry_id=entries.id AND type LIKE \'image/%\' LIMIT 1) AS cover FROM entries ORDER BY date DESC, created DESC').all();
         return send(200, rows);
+      }
+      if (route === '/api/export/markdown' && req.method === 'GET') {
+        res.writeHead(200, {'Content-Type':'text/markdown; charset=utf-8','Content-Disposition':'attachment; filename="charlie-journal.md"'});
+        return res.end(exportMarkdown(db.prepare('SELECT * FROM entries ORDER BY date, created').all()));
+      }
+      if (route === '/api/import' && req.method === 'POST') {
+        const body = await jsonBody(req, 4 * 1024 * 1024);
+        if (typeof body.id !== 'string' || !/^[a-f0-9-]{36}$/.test(body.id) || !Array.isArray(body.entries) || !body.entries.length || body.entries.length > 500) throw fail(400, 'Choose between 1 and 500 entries to import.');
+        const digest = createHash('sha256').update(JSON.stringify(body.entries)).digest('hex');
+        const previous = db.prepare('SELECT * FROM imports WHERE id=?').get(body.id);
+        if (previous) {
+          if (previous.digest !== digest) throw fail(409, 'This import changed. Preview the file again.');
+          return send(200, JSON.parse(previous.result));
+        }
+        const incoming = body.entries.map(item => { if (!item || typeof item !== 'object') throw fail(400,'Invalid entry.'); return validateEntry(item); });
+        const existing = db.prepare('SELECT * FROM entries').all();
+        let added=0, skipped=0;
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          const insert=db.prepare('INSERT INTO entries (id,title,content,section,date,chapter,mood,tags,favorite,created,updated,topic,last_mutation) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
+          for (const entry of incoming) {
+            if (existing.some(row => sameEntry(row,entry))) { skipped++; continue; }
+            const now=new Date().toISOString();
+            insert.run(randomUUID(),entry.title,entry.content,entry.section,entry.date,entry.chapter,entry.mood,entry.tags,entry.favorite,now,now,entry.topic,'');
+            existing.push(entry); added++;
+          }
+          const result={added,skipped};
+          db.prepare('INSERT INTO imports VALUES (?,?,?)').run(body.id,digest,JSON.stringify(result));
+          db.exec('COMMIT');
+          return send(200,result);
+        } catch(error) { db.exec('ROLLBACK'); throw error; }
       }
       if (route === '/api/export' && req.method === 'GET') {
         res.setHeader('Content-Disposition', 'attachment; filename="charlie-journal.json"');
