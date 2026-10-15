@@ -169,3 +169,11 @@ body.modal-open{overflow:hidden}
 #import-preview{margin:24px 0}.import-entry{border-top:1px solid var(--line);padding:12px 0}.import-entry p{margin-top:12px}.import-entry pre{white-space:pre-wrap;overflow-wrap:anywhere;font:16px/1.8 Georgia,serif}
 #import-error{color:#e1aaa4}.import-panel .editor-top{position:static}
 @media(max-width:700px){#entry-form{padding:15px 25px 0}.import-panel{padding:24px}.editor-top{margin-bottom:15px}#entry-content{min-height:45dvh}}
+
+.caret-measure{position:fixed;top:0;left:-10000px;visibility:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:break-word;border-style:solid;border-color:transparent}
+@media(max-width:700px){
+  #editor{position:fixed;top:var(--writing-top,0px);bottom:auto;height:var(--writing-height,100dvh);max-height:var(--writing-height,100dvh);overflow-y:auto;scroll-padding:24px}
+  #entry-content{height:max(150px,calc(var(--writing-height,100dvh) - 230px));min-height:150px;overflow-y:auto;padding-bottom:80px;scroll-padding-bottom:64px;-webkit-overflow-scrolling:touch}
+  #editor .editor-top{position:static}
+  #editor .editor-bottom{position:static}
+}

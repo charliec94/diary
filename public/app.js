@@ -127,7 +127,11 @@ async function openEditor(entry=null,section='journal',prompt='',chapter='',topi
   if(prompt||recovery)$('#entry-content').focus();else $('#entry-title').focus();
   if(entry)try{await loadAttachments();}catch(error){$('#editor-error').textContent=error.message;}
 }
-function resizeWriting(){const field=$('#entry-content');field.style.height='auto';field.style.height=`${field.scrollHeight}px`;}
+function resizeWriting(){
+  const field=$('#entry-content');
+  if(window.matchMedia('(max-width:700px)').matches){field.style.removeProperty('height');return;}
+  field.style.height='auto';field.style.height=field.scrollHeight+'px';
+}
 function wordCount(){resizeWriting();const value=$('#entry-content').value.trim();$('#word-count').textContent=`${value?value.split(/\s+/).length:0} words`;}
 function changed(){wordCount();saver?.update(entryPayload());}
 $('#entry-form').addEventListener('input',event=>{if(event.target.id!=='upload'&&event.target.id!=='entry-section')changed();});
@@ -232,3 +236,45 @@ $('#confirm-import').addEventListener('click',async()=>{
   }catch(error){$('#import-error').textContent=error.message+' You can retry this import safely.';}
   finally{busy=false;for(const id of ['import-file','import-date','close-import'])$('#'+id).disabled=false;$('#confirm-import').disabled=!importBatch?.entries.length;}
 });
+
+// iOS keeps the layout viewport behind its keyboard. Size the writing sheet to
+// the visible viewport and scroll the textarea itself, with room below the caret.
+let mobileFrame=0;
+function mobileWritingFrame(){
+  cancelAnimationFrame(mobileFrame);
+  mobileFrame=requestAnimationFrame(()=>{
+    const editor=$('#editor');
+    if(!editor.open||!window.matchMedia('(max-width:700px)').matches)return;
+    const viewport=window.visualViewport;
+    editor.style.setProperty('--writing-height',(viewport?.height||window.innerHeight)+'px');
+    editor.style.setProperty('--writing-top',(viewport?.offsetTop||0)+'px');
+    const field=$('#entry-content');
+    if(document.activeElement!==field||field.selectionStart!==field.selectionEnd)return;
+    const mirror=document.createElement('div');
+    mirror.className='caret-measure';mirror.setAttribute('aria-hidden','true');
+    const style=getComputedStyle(field);
+    for(const key of ['fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing','wordSpacing','textIndent','tabSize','paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','boxSizing'])mirror.style[key]=style[key];
+    mirror.style.width=field.clientWidth+'px';
+    mirror.textContent=field.value.slice(0,field.selectionStart);
+    const marker=document.createElement('span');marker.textContent=field.value.slice(field.selectionStart)||'.';mirror.append(marker);
+    editor.append(mirror);
+    const caretTop=marker.getBoundingClientRect().top-mirror.getBoundingClientRect().top;
+    mirror.remove();
+    const line=parseFloat(style.lineHeight)||30;
+    const bottom=field.clientHeight-Math.min(64,field.clientHeight/4);
+    if(caretTop+line-field.scrollTop>bottom)field.scrollTop=caretTop+line-bottom;
+    else if(caretTop-field.scrollTop<16)field.scrollTop=Math.max(0,caretTop-16);
+    const visibleTop=(viewport?.offsetTop||0)+20;
+    const visibleBottom=(viewport?.offsetTop||0)+(viewport?.height||window.innerHeight)-48;
+    const cursorTop=field.getBoundingClientRect().top+caretTop-field.scrollTop;
+    if(cursorTop+line>visibleBottom)editor.scrollTop+=cursorTop+line-visibleBottom;
+    else if(cursorTop<visibleTop)editor.scrollTop-=visibleTop-cursorTop;
+  });
+}
+$('#entry-content').addEventListener('input',mobileWritingFrame);
+$('#entry-content').addEventListener('click',mobileWritingFrame);
+$('#entry-content').addEventListener('keyup',mobileWritingFrame);
+$('#editor').addEventListener('focusin',mobileWritingFrame);
+window.visualViewport?.addEventListener('resize',mobileWritingFrame);
+window.visualViewport?.addEventListener('scroll',mobileWritingFrame);
+window.addEventListener('resize',mobileWritingFrame);
