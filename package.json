@@ -1,6 +1,6 @@
 {
   "name": "charlie-life-journal",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "description": "A private life journal for Unraid",
@@ -10,6 +10,6 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "build": "node --check server.js && node --check public/app.js && node --check public/sections.js && node --check public/journal-utils.js && node --check public/markdown.js"
+    "build": "node --check server.js && node --check public/app.js && node --check public/sections.js && node --check public/journal-utils.js && node --check public/markdown.js && node --check public/reading.js"
   }
 }

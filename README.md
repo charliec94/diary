@@ -19,6 +19,14 @@ A self-hosted journal for Charlie's people, places, memories, growth, and future
 
 No fictional personal entries are seeded. The outline supplies sections and prompts only. Photos and keepsakes come from your uploads. Writing autosaves after a short pause; **Save entry** also saves immediately. Untitled writing saves as “Untitled entry.” An untouched blank editor creates nothing. Conflicting edits from another tab stop autosave rather than overwrite newer writing.
 
+## Reading, calendar, and quick photos
+
+Open an entry to read formatted Markdown and attachments in a spacious view. Choose **Edit** to change the original writing; outline topics stay intact.
+
+Choose **Calendar** to browse months and select a day. Dots mark dates with entries. Writing or adding a photo from this view uses the selected date.
+
+Choose **Photo** to select a picture, save it as a memory, and add a caption. Photos use existing persistent attachment storage under appdata. JPEG, PNG, GIF, and WebP are supported up to 25 MB. Other formats are converted to JPEG only if the browser can decode them; if an iPhone HEIC cannot be opened, export it as JPEG first. Wait for confirmation before leaving. Text draft recovery does not retain pending photo uploads.
+
 ## Run locally
 
 Requires **Node.js 24.14 or later in the 24 LTS line**, including SQLite. There are no dependencies to install.

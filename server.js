@@ -72,7 +72,7 @@ export function createJournal({ dataDir = process.env.DATA_DIR || path.join(root
   }
   // Legacy authentication tables are left untouched for non-destructive upgrades.
   // Access is now controlled by the network; no password or session is required.
-  const staticFiles = new Map([['/', ['index.html', 'text/html']], ['/app.js', ['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/sections.js',['sections.js','text/javascript']], ['/favicon.svg',['favicon.svg','image/svg+xml']], ['/journal-utils.js',['journal-utils.js','text/javascript']], ['/markdown.js',['markdown.js','text/javascript']]].map(([url,[file,type]]) => [url,{ data: readFileSync(path.join(root,'public',file)), type }]));
+  const staticFiles = new Map([['/', ['index.html', 'text/html']], ['/app.js', ['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/sections.js',['sections.js','text/javascript']], ['/favicon.svg',['favicon.svg','image/svg+xml']], ['/journal-utils.js',['journal-utils.js','text/javascript']], ['/markdown.js',['markdown.js','text/javascript']], ['/reading.js',['reading.js','text/javascript']]].map(([url,[file,type]]) => [url,{ data: readFileSync(path.join(root,'public',file)), type }]));
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');

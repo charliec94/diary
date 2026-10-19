@@ -17,7 +17,7 @@
     <form id="entry-form">
       <div class="editor-top"><span class="eyebrow" id="editor-label">New entry</span><button type="button" class="icon-button" id="close-editor" aria-label="Close editor">✕</button></div>
       <input id="entry-title" class="title-input" aria-label="Entry title" placeholder="Title" maxlength="200">
-      <label class="sr-only" for="entry-content">Your story</label><textarea id="entry-content" placeholder="What’s on your mind?" maxlength="200000"></textarea>
+      <div id="photo-lead"></div><label class="sr-only" for="entry-content">Your story</label><textarea id="entry-content" placeholder="What’s on your mind?" maxlength="200000"></textarea>
       <details class="format-tools"><summary>Formatting</summary><div class="format-buttons" aria-label="Markdown formatting"><button type="button" data-format="bold">Bold</button><button type="button" data-format="italic">Italic</button><button type="button" data-format="heading">Heading</button><button type="button" data-format="list">List</button><button type="button" data-format="quote">Quote</button></div><p class="muted">Select writing, then choose a style. Markdown marks stay visible as you write.</p></details><div class="writing-meta"><span id="word-count">0 words</span></div>
       <details id="prompt-details" class="editor-disclosure"><summary>Writing prompts</summary><div id="editor-prompts" class="editor-prompts"></div></details>
       <details id="entry-details" class="editor-disclosure"><summary>Entry details</summary><div class="editor-fields"><label>Section<select id="entry-section"></select></label><label>Outline topic<select id="entry-topic"></select></label><label>Date<input id="entry-date" type="date" required></label><label>Life chapter<select id="entry-chapter"></select></label><label>Mood<select id="entry-mood"><option value="">Not set</option><option>Great</option><option>Good</option><option>Okay</option><option>Low</option><option>Difficult</option></select></label></div><label class="tags-label">Tags<input id="entry-tags" placeholder="People, places… (comma separated)" maxlength="300"></label><label class="favorite-check"><input type="checkbox" id="entry-favorite"> Keep as a favorite</label></details>
@@ -33,6 +33,12 @@
     <div id="import-preview" aria-live="polite"></div><p id="import-error" role="alert"></p>
     <button type="button" class="primary" id="confirm-import" disabled>Import entries</button></div>
   </dialog>
+  <input id="quick-photo" type="file" accept="image/*" hidden>
+  <dialog id="reader" aria-labelledby="reader-title"><article class="reading-page">
+    <div class="reader-toolbar"><button type="button" class="text-button" id="close-reader">← Back</button><button type="button" class="text-button" id="edit-reader">Edit entry</button></div>
+    <p class="eyebrow" id="reader-date"></p><h1 id="reader-title"></h1><p class="muted" id="reader-meta"></p>
+    <div id="reader-content" class="reading-content"></div><div id="reader-attachments"></div><p id="reader-error" role="alert"></p>
+  </article></dialog>
   <div id="toast" role="status" hidden></div>
 </body>
 </html>

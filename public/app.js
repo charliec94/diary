@@ -1,3 +1,4 @@
+import { readingHTML, monthDays, moveMonth, photoType } from './reading.js';
 import { parseMarkdown, formatSelection } from './markdown.js';
 import { sections, chapters } from './sections.js';
 import { onThisDay, newId, createDraftStore, createAutosaver } from './journal-utils.js';
@@ -6,6 +7,7 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const sectionById = id => sections.find(s => s.id === id) || sections.find(s => s.id === 'journal');
 const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const formatDate = date => new Date(`${date}T12:00:00`).toLocaleDateString(undefined,{ month:'short',day:'numeric',year:'numeric' });
+let calendarMonth=localDate().slice(0,7), calendarDay=localDate(), readingId=null;
 let entries = [], active = 'all', query = '', moodFilter = '', chapterFilter = '', sort = 'newest', topicFilter = '', editing = null, dirty = false, busy = false, toastTimer;
 async function api(url, options = {}) {
   const headers = { 'X-Journal-Request': '1', ...options.headers };
@@ -20,7 +22,7 @@ async function api(url, options = {}) {
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 5000); }
 async function start() { entries = await api('/api/entries'); readRoute(); render(); }
 function nav() {
-  const primary = [['outline','Life outline','☷'],['anniversary','On this day','◷'],['all','All entries','▤'],['favorites','Favorites','☆'],['life','Life timeline','⌁'],['gallery','Memory box','▧']];
+  const primary = [['calendar','Calendar','▦'],['outline','Life outline','☷'],['anniversary','On this day','◷'],['all','All entries','▤'],['favorites','Favorites','☆'],['life','Life timeline','⌁'],['gallery','Memory box','▧']];
   const navItem = (id,name,icon,count) => `<a class="nav-item ${active === id ? 'active' : ''}" href="#${id}" ${active === id ? 'aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${icon}</span><span>${esc(name)}</span>${count ? `<span class="nav-count">${count}</span>` : ''}</a>`;
   $('#main-nav').innerHTML = primary.map(([id,name,icon]) => navItem(id,name,icon,id === 'all' ? entries.length : '')).join('');
   $('#section-nav').innerHTML = sections.map(s => navItem(s.id,s.name,s.icon,entries.filter(e=>e.section===s.id).length)).join('');
@@ -47,15 +49,16 @@ function renderResults() {
   } else $('#results').innerHTML = `<div class="entries-grid">${rows.map(card).join('')}</div>`;
 }
 function render() {
-  if (!['all','favorites','life','gallery','outline','anniversary',...sections.map(s=>s.id)].includes(active)) active = 'all';
+  if (!['all','favorites','life','gallery','outline','anniversary','calendar',...sections.map(s=>s.id)].includes(active)) active = 'all';
   nav();
   if(active === 'outline'){renderOutline();return;}
+  if(active === 'calendar'){renderCalendar();return;}
   const section = sectionById(active);
   const titles = {anniversary:'On this day',all:'My journal',favorites:'Favorites',life:'Life timeline',gallery:'Memory box'};
   const mainTitle = topicFilter || titles[active] || section.name;
   $('#breadcrumb').textContent = mainTitle;
   const prompts = titles[active] ? sectionById('journal').prompts : section.prompts;
-  $('#main').innerHTML = `<div class="page-heading"><div><p class="eyebrow">${new Date().toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})}</p><h1>${esc(mainTitle)}</h1>${topicFilter ? `<a class="topic-parent" href="#${section.id}">${esc(section.name)} / All topics</a>` : ''}</div><button class="primary" data-action="new">Write <span aria-hidden="true">＋</span></button></div>${active === 'all' ? `<div class="quiet-links"><a href="#outline">Life outline</a><a href="#anniversary">On this day${onThisDay(entries,localDate()).length ? ` · ${onThisDay(entries,localDate()).length}` : ''}</a></div>` : ''}<div id="recovery"></div><div class="journal-tools"><span id="result-count" class="count"></span><details class="filter-details"><summary>Search & filter</summary><div class="toolbar"><label class="search-wrap"><span class="sr-only">Search entries</span><input id="search" placeholder="Search your journal…" value="${esc(query)}" type="search"></label>${active === 'life' ? `<select id="chapter-filter" aria-label="Filter by life chapter"><option value="">All life chapters</option>${chapters.map(c=>`<option ${chapterFilter===c?'selected':''}>${esc(c)}</option>`).join('')}</select>` : `<select id="mood-filter" aria-label="Filter by mood"><option value="">Any mood</option>${['Great','Good','Okay','Low','Difficult'].map(m=>`<option ${moodFilter===m?'selected':''}>${m}</option>`).join('')}</select>`}<select id="sort" aria-label="Sort entries"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="updated">Recently edited</option></select><button data-action="clear-filters" class="text-button">Clear</button></div></details></div><div id="results" class="${active==='gallery'?'gallery-view':''}"></div><details class="writing-prompts"><summary>A little inspiration</summary><div class="prompt-list" aria-label="Writing prompts">${prompts.map(p=>`<button class="prompt-chip" data-prompt="${esc(p)}" data-section="${titles[active]?'journal':section.id}">${esc(p)} <span aria-hidden="true">↗</span></button>`).join('')}</div></details>`;
+  $('#main').innerHTML = `<div class="page-heading"><div><p class="eyebrow">${new Date().toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})}</p><h1>${esc(mainTitle)}</h1>${topicFilter ? `<a class="topic-parent" href="#${section.id}">${esc(section.name)} / All topics</a>` : ''}</div><div class="entry-actions"><button type="button" class="text-button" data-action="photo">Photo</button><button class="primary" data-action="new">Write <span aria-hidden="true">＋</span></button></div></div>${active === 'all' ? `<div class="quiet-links"><a href="#outline">Life outline</a><a href="#calendar">Calendar</a><a href="#anniversary">On this day${onThisDay(entries,localDate()).length ? ` · ${onThisDay(entries,localDate()).length}` : ''}</a></div>` : ''}<div id="recovery"></div><div class="journal-tools"><span id="result-count" class="count"></span><details class="filter-details"><summary>Search & filter</summary><div class="toolbar"><label class="search-wrap"><span class="sr-only">Search entries</span><input id="search" placeholder="Search your journal…" value="${esc(query)}" type="search"></label>${active === 'life' ? `<select id="chapter-filter" aria-label="Filter by life chapter"><option value="">All life chapters</option>${chapters.map(c=>`<option ${chapterFilter===c?'selected':''}>${esc(c)}</option>`).join('')}</select>` : `<select id="mood-filter" aria-label="Filter by mood"><option value="">Any mood</option>${['Great','Good','Okay','Low','Difficult'].map(m=>`<option ${moodFilter===m?'selected':''}>${m}</option>`).join('')}</select>`}<select id="sort" aria-label="Sort entries"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="updated">Recently edited</option></select><button data-action="clear-filters" class="text-button">Clear</button></div></details></div><div id="results" class="${active==='gallery'?'gallery-view':''}"></div><details class="writing-prompts"><summary>A little inspiration</summary><div class="prompt-list" aria-label="Writing prompts">${prompts.map(p=>`<button class="prompt-chip" data-prompt="${esc(p)}" data-section="${titles[active]?'journal':section.id}">${esc(p)} <span aria-hidden="true">↗</span></button>`).join('')}</div></details>`;
   $('.filter-details').open = Boolean(query || moodFilter || chapterFilter || sort !== 'newest');
   $('#search').addEventListener('input',event=>{query=event.target.value;renderResults();});
   $('#mood-filter')?.addEventListener('change',event=>{moodFilter=event.target.value;renderResults();});
@@ -73,14 +76,16 @@ $('#navigation').addEventListener('toggle',()=>{document.body.classList.toggle('
 document.addEventListener('keydown',event=>{if(event.key==='Escape' && $('#navigation').open){setNavigation(false);$('#menu').focus();}});
 document.addEventListener('click',event=>{if($('#navigation').open && !event.target.closest('#navigation') && !event.target.closest('#menu'))setNavigation(false);});
 document.addEventListener('click',async event=>{
+  if(busy)return;
   const entry=event.target.closest('[data-entry]');
   const prompt=event.target.closest('[data-prompt]');
   const action=event.target.closest('[data-action]')?.dataset.action;
   const outlineWrite=event.target.closest('[data-outline-write]');
   try {
     if(outlineWrite) await openEditor(null,outlineWrite.dataset.outlineWrite,'','',outlineWrite.dataset.topic||'');
-    else if(entry) await openEditor(await api(`/api/entries/${entry.dataset.entry}`));
+    else if(entry) await openReader(entry.dataset.entry);
     else if(prompt) await openEditor(null,prompt.dataset.section,prompt.dataset.prompt,'',topicFilter||prompt.dataset.prompt);
+    else if(action==='photo') $('#quick-photo').click();
     else if(action==='new') await openEditor(null,sections.some(s=>s.id===active)?active:'journal','','',topicFilter);
     else if(action==='chapter') await openEditor(null,'timeline','', '2026 — Rebuilding');
     else if(action==='clear-filters'){query='';moodFilter='';chapterFilter='';sort='newest';render();}
@@ -116,8 +121,8 @@ function saveState(state){
 }
 async function openEditor(entry=null,section='journal',prompt='',chapter='',topic='',recovery=null){
   if($('#editor').open)return;
-  setNavigation(false);editing=entry;dirty=false;$('#entry-details').open=false;$('#prompt-details').open=false;$('#memory-details').open=false;$('#editor-error').textContent='';$('#attachments').innerHTML='';
-  const values=recovery?.latest||entry||{title:prompt,content:'',section,date:localDate(),chapter:chapter||(section==='timeline'&&chapters.includes(topic)?topic:''),mood:'',tags:'',favorite:false,topic:sectionById(section).prompts.includes(topic)?topic:''};
+  setNavigation(false);$('#photo-lead').textContent='';$('#entry-content').placeholder='What’s on your mind?';editing=entry;dirty=false;$('#entry-details').open=false;$('#prompt-details').open=false;$('#memory-details').open=false;$('#editor-error').textContent='';$('#attachments').innerHTML='';
+  const values=recovery?.latest||entry||{title:prompt,content:'',section,date:active==='calendar'?calendarDay:localDate(),chapter:chapter||(section==='timeline'&&chapters.includes(topic)?topic:''),mood:'',tags:'',favorite:false,topic:sectionById(section).prompts.includes(topic)?topic:''};
   $('#entry-title').value=values.title;$('#entry-content').value=values.content;$('#entry-section').value=values.section;$('#entry-date').value=values.date;$('#entry-chapter').value=values.chapter;$('#entry-mood').value=values.mood;$('#entry-tags').value=values.tags;$('#entry-favorite').checked=Boolean(values.favorite);topicOptions(values.topic||'');
   $('#editor-label').textContent=entry?formatDate(entry.date):'New entry';$('#delete-entry').hidden=!entry;$('#upload').disabled=!entry;$('#upload-help').textContent=entry?'Photos, voice notes, videos, or documents. Up to 25 MB each; 20 attachments per entry.':'Start writing to autosave your entry, then add attachments.';$('#save-status').textContent=entry?'Saved to journal':'Autosave is on';wordCount();editorPrompts();
   draftKey=recovery?.key||newId();
@@ -172,7 +177,7 @@ function renderOutline(){
   }).join('')}</div>`;
   renderRecovery();
 }
-try{await start();}catch(error){$('#main').innerHTML=`<div class="error-panel"><h1>Couldn’t open your journal.</h1><p>${esc(error.message)}</p><button class="primary" data-action="retry">Try again</button></div><div id="recovery"></div>`;renderRecovery();}
+
 document.addEventListener('click',async event=>{if(event.target.closest('[data-action="retry"]')){try{await start();}catch(error){toast(error.message);}}});
 
 // Optional browser agent integration opens an editor; it follows the same autosave behavior as the visible editor.
@@ -278,3 +283,89 @@ $('#editor').addEventListener('focusin',mobileWritingFrame);
 window.visualViewport?.addEventListener('resize',mobileWritingFrame);
 window.visualViewport?.addEventListener('scroll',mobileWritingFrame);
 window.addEventListener('resize',mobileWritingFrame);
+
+
+let readerSequence=0;
+function closeReader(){readerSequence++;$('#reader').close();document.body.classList.remove('modal-open');}
+$('#close-reader').addEventListener('click',closeReader);
+$('#reader').addEventListener('cancel',event=>{event.preventDefault();closeReader();});
+async function openReader(id){
+  if($('#editor').open)return;
+  setNavigation(false);readingId=id;const sequence=++readerSequence;
+  $('#reader-title').textContent='Opening entry…';$('#reader-date').textContent='';$('#reader-meta').textContent='';$('#reader-content').textContent='';$('#reader-attachments').textContent='';$('#reader-error').textContent='';$('#edit-reader').disabled=true;
+  if(!$('#reader').open)$('#reader').showModal();$('#reader').scrollTop=0;document.body.classList.add('modal-open');
+  try{
+    const entry=await api(`/api/entries/${id}`);if(sequence!==readerSequence)return;
+    $('#reader-title').textContent=entry.title;$('#reader-date').textContent=formatDate(entry.date);
+    $('#reader-meta').textContent=[sectionById(entry.section).name,entry.topic,entry.chapter,entry.mood,entry.tags].filter(Boolean).join(' · ');
+    $('#reader-content').innerHTML=readingHTML(entry.content);$('#edit-reader').disabled=false;
+    const files=await api(`/api/entries/${id}/attachments`);if(sequence!==readerSequence)return;
+    $('#reader-attachments').innerHTML=files.map(file=>{
+      const url='/api/attachments/'+encodeURIComponent(file.id);
+      const media=file.type.startsWith('image/')?`<a href="${url}" target="_blank" rel="noopener"><img loading="lazy" src="${url}" alt="${esc(file.name)}"></a>`:file.type.startsWith('audio/')?`<audio controls preload="metadata" src="${url}"></audio>`:file.type.startsWith('video/')?`<video controls preload="metadata" src="${url}"></video>`:'';
+      return `<figure>${media}<figcaption><a href="${url}?download=1" download>${esc(file.name)} ↓</a></figcaption></figure>`;
+    }).join('');
+  }catch(error){if(sequence===readerSequence)$('#reader-error').textContent=error.message;}
+}
+$('#edit-reader').addEventListener('click',async()=>{
+  const id=readingId;$('#edit-reader').disabled=true;
+  try{const entry=await api(`/api/entries/${id}`);if(!$('#reader').open||id!==readingId)return;closeReader();await openEditor(entry);}
+  catch(error){$('#reader-error').textContent=error.message;}
+  finally{$('#edit-reader').disabled=false;}
+});
+function renderCalendar(){
+  const {offset,days}=monthDays(calendarMonth), counts=new Map();
+  for(const entry of entries)counts.set(entry.date,(counts.get(entry.date)||0)+1);
+  const label=new Date(calendarMonth+'-01T12:00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  const rows=entries.filter(e=>e.date===calendarDay).sort((a,b)=>a.created.localeCompare(b.created));
+  $('#breadcrumb').textContent='Calendar';
+  $('#main').innerHTML=`<div class="page-heading"><div><p class="eyebrow">A day at a time</p><h1>Calendar</h1></div><button class="primary" data-action="new">Write ＋</button></div><div class="calendar-controls"><button class="icon-button" data-month="-1" aria-label="Previous month">‹</button><h2>${esc(label)}</h2><button class="icon-button" data-month="1" aria-label="Next month">›</button></div><div class="calendar-jump"><label>Jump to month<input type="month" id="calendar-month" value="${calendarMonth}" min="0001-01" max="9999-12"></label><button class="text-button" data-today>Today</button><button class="text-button" data-action="photo">Photo entry</button></div><div class="calendar-grid" aria-label="${esc(label)}">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<span class="weekday">${d}</span>`).join('')}${'<span aria-hidden="true"></span>'.repeat(offset)}${days.map(date=>`<button class="calendar-day ${date===calendarDay?'selected':''}" data-day="${date}" aria-pressed="${date===calendarDay}" ${date===localDate()?'aria-current="date"':''} aria-label="${esc(formatDate(date))}, ${counts.get(date)||0} entries"><span>${Number(date.slice(-2))}</span><span class="calendar-dot" aria-hidden="true">${counts.has(date)?'•':'&nbsp;'}</span></button>`).join('')}</div><p class="muted calendar-legend">A dot marks a day with writing or photos.</p><h2 class="calendar-date">${esc(formatDate(calendarDay))}</h2><div id="recovery"></div><div class="entries-grid">${rows.length?rows.map(card).join(''):'<p class="muted">Nothing saved for this day yet. Write an entry or add a photo.</p>'}</div>`;
+  $('#calendar-month').addEventListener('change',event=>{try{monthDays(event.target.value);calendarMonth=event.target.value;calendarDay=calendarMonth+'-01';render();}catch{event.target.value=calendarMonth;}});
+  renderRecovery();
+}
+document.addEventListener('click',event=>{
+  const day=event.target.closest('[data-day]'),month=event.target.closest('[data-month]');
+  if(day){calendarDay=day.dataset.day;render();document.querySelector(`[data-day="${calendarDay}"]`)?.focus({preventScroll:true});}
+  else if(month){calendarMonth=moveMonth(calendarMonth,Number(month.dataset.month));calendarDay=calendarMonth+'-01';render();document.querySelector(`[data-month="${month.dataset.month}"]`)?.focus({preventScroll:true});}
+  else if(event.target.closest('[data-today]')){calendarDay=localDate();calendarMonth=calendarDay.slice(0,7);render();$('#main').focus({preventScroll:true});}
+});
+async function preparePhoto(file){
+  if(file.size>25*1024*1024)throw new Error('Choose a photo smaller than 25 MB.');
+  const type=photoType(new Uint8Array(await file.slice(0,16).arrayBuffer()));
+  const url=URL.createObjectURL(file),picture=new Image();
+  try{
+    await new Promise((resolve,reject)=>{picture.onload=resolve;picture.onerror=()=>reject(new Error('This photo format cannot be opened here. Choose a JPEG, PNG, WebP, or GIF, or export your iPhone photo as JPEG.'));picture.src=url;});
+    if(type)return new File([file],file.name,{type});
+    // Safari can decode some HEIC photos. Convert those locally for other browsers.
+    const scale=Math.min(1,4096/Math.max(picture.naturalWidth,picture.naturalHeight)),canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(picture.naturalWidth*scale));canvas.height=Math.max(1,Math.round(picture.naturalHeight*scale));
+    const context=canvas.getContext('2d');if(!context)throw new Error('Could not prepare the photo. Please choose a JPEG.');
+    context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(picture,0,0,canvas.width,canvas.height);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.9));
+    if(!blob)throw new Error('Could not convert this photo. Please choose a JPEG.');
+    return new File([blob],file.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
+  }finally{URL.revokeObjectURL(url);}
+}
+$('#quick-photo').addEventListener('change',async event=>{
+  const original=event.target.files[0];event.target.value='';if(!original||busy||$('#editor').open)return;
+  busy=true;toast('Preparing your photo…');let created=false, photoSaved=false;
+  try{
+    const photo=await preparePhoto(original);
+    const section=sections.some(s=>s.id===active)?active:'memories';
+    await openEditor(null,section,'','',topicFilter);
+    setBusy(true);$('#entry-title').value='Photo memory';$('#entry-content').placeholder='What do you want to remember about this photo?';
+    $('#entry-title').blur();changed();await saver.flush();created=true;
+    $('#save-status').textContent='Saving photo…';
+    const uploaded=await api(`/api/entries/${editing.id}/attachments`,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-File-Name':encodeURIComponent(photo.name)},body:photo,signal:AbortSignal.timeout(120000)});
+    photoSaved=true;$('#photo-lead').innerHTML=`<img src="/api/attachments/${uploaded.id}" alt="${esc(uploaded.name)}">`;
+    $('#memory-details').open=true;$('#entry-details').open=true;
+    await loadAttachments();entries=await api('/api/entries');render();toast('Photo saved. Add a caption whenever you’re ready.');
+  }catch(error){
+    const message=photoSaved?'Your photo is saved. Reopen the entry to refresh its attachments. '+error.message:created?'Your entry is saved, but the photo upload was not confirmed. Check Attachments before adding it again. '+error.message:error.message;
+    if($('#editor').open){$('#editor-error').textContent=message;$('#memory-details').open=true;if(created)try{await loadAttachments();}catch{}}
+    else toast(message);
+  }finally{setBusy(false);if(created)$('#save-status').textContent=dirty?'Waiting to save…':'Entry saved';}
+});
+
+
+try{await start();}catch(error){$('#main').innerHTML=`<div class="error-panel"><h1>Couldn’t open your journal.</h1><p>${esc(error.message)}</p><button class="primary" data-action="retry">Try again</button></div><div id="recovery"></div>`;renderRecovery();}
