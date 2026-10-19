@@ -97,3 +97,12 @@ Pull the new image and keep the existing `/data` mount. No journal migration or 
 ## Autosave storage
 
 Autosaved entries and their outline topics use the same journal database under `/data`. No automatic backup job is added; use your existing Unraid appdata backup. Browser recovery copies contain only unfinished writing awaiting sync and are not part of NAS backups until saved to the server. Keep the existing appdata mount when updating to this version.
+
+## Docker dashboard icon
+
+The template uses a 256 x 256 PNG journal icon, with its editable SVG source in `unraid/`.
+For an already installed container, edit Diary in Unraid, enable Advanced View, and set Icon URL to:
+
+https://raw.githubusercontent.com/charliec94/diary/main/unraid/diary-icon.png
+
+Apply the change. Updating the image alone does not update an installed container's template fields.

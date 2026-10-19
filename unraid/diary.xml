@@ -12,7 +12,7 @@
   <Category>Productivity:</Category>
   <WebUI>http://[IP]:[PORT:3000]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/charliec94/diary/main/unraid/diary.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/charliec94/diary/main/public/favicon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/charliec94/diary/main/unraid/diary-icon.png</Icon>
   <TailscaleEnabled>true</TailscaleEnabled>
   <TailscaleHostname>diary</TailscaleHostname>
   <TailscaleIsExitNode>false</TailscaleIsExitNode>
