@@ -171,7 +171,7 @@ body.modal-open{overflow:hidden}
 @media(max-width:700px){#entry-form{padding:15px 25px 0}.import-panel{padding:24px}.editor-top{margin-bottom:15px}#entry-content{min-height:45dvh}}
 
 .caret-measure{position:fixed;top:0;left:-10000px;visibility:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:break-word;border-style:solid;border-color:transparent}
-@media(max-width:700px){
+@media(max-width:700px), (any-pointer:coarse){
   #editor{position:fixed;top:var(--writing-top,0px);bottom:auto;height:var(--writing-height,100dvh);max-height:var(--writing-height,100dvh);overflow-y:auto;scroll-padding:24px}
   #entry-content{height:max(150px,calc(var(--writing-height,100dvh) - 230px));min-height:150px;overflow-y:auto;padding-bottom:80px;scroll-padding-bottom:64px;-webkit-overflow-scrolling:touch}
   #editor .editor-top{position:static}
@@ -183,3 +183,31 @@ body.modal-open{overflow:hidden}
 #reader-attachments figure{margin:30px 0}#reader-attachments img,#reader-attachments video,#photo-lead img{max-width:100%;max-height:65dvh;object-fit:contain;border-radius:5px}#reader-attachments audio{width:100%}#reader-attachments figcaption{font-size:12px;color:var(--muted);overflow-wrap:anywhere}#reader-error{color:#e1aaa4}#photo-lead:empty{display:none}#photo-lead{margin-bottom:20px}
 .calendar-controls{display:flex;align-items:center;justify-content:space-between;gap:16px}.calendar-controls h2{margin:0;font-size:27px}.calendar-controls button{min-width:44px;min-height:44px}.calendar-jump{display:flex;align-items:end;gap:14px;margin:20px 0}.calendar-jump label{flex:1}.calendar-jump input{max-width:220px}.calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}.weekday{text-align:center;color:var(--muted);font-size:12px;padding:8px 0}.calendar-day{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:58px;border-radius:5px;border:1px solid transparent}.calendar-day:hover{background:var(--hover)}.calendar-day.selected{background:var(--hover);border-color:var(--accent)}.calendar-day[aria-current=date]{color:#fff;font-weight:bold}.calendar-dot{height:15px;font-size:18px;line-height:15px;color:var(--accent)}.calendar-legend{margin-top:16px}.calendar-date{margin-top:40px;font-size:25px}
 @media(max-width:700px){.reading-page{padding:18px 25px 70px}.reading-content{font-size:19px}.reader-toolbar{margin-bottom:35px}.entry-actions{gap:0}.calendar-jump{flex-wrap:wrap}.calendar-day{min-height:48px}.calendar-grid{gap:2px}.calendar-controls h2{font-size:24px}}
+
+/* Tablet touch use, including iPad with an attached trackpad. */
+@media (any-pointer:coarse){
+  button,summary,.nav-item,.quiet-links a,.export-link,.upload-button{min-height:44px}
+  .icon-button,.attachment-row button,.outline-topic button{min-width:44px}
+  summary{display:flex;align-items:center}
+  .quiet-links a,.export-link{display:inline-flex;align-items:center}
+  .toolbar input,.toolbar select,.editor-fields input,.editor-fields select,.tags-label input{font-size:16px;min-height:44px}
+  .entry-arrow{opacity:.7}
+  .reader-toolbar{position:sticky;top:0;z-index:2;background:var(--background);padding:8px 0}
+  .calendar-day{min-height:60px}
+  #entry-form{padding-bottom:env(safe-area-inset-bottom,0px)}
+}
+/* Keep readable line lengths while allowing narrow Split View windows. */
+.topbar{padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right))}
+main,.reading-page,#entry-form{padding-left:max(25px,env(safe-area-inset-left));padding-right:max(25px,env(safe-area-inset-right))}
+.reading-page{padding-bottom:max(70px,env(safe-area-inset-bottom))}
+.brand,.page-heading>div{min-width:0}#breadcrumb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.entry-actions{flex-shrink:0}.calendar-jump label{min-width:0}.calendar-jump input{min-width:0;width:100%}
+@media(min-width:701px) and (max-width:1400px){
+  main{padding-top:38px}.page-heading{margin-bottom:48px}
+  main,.reading-page,#entry-form{padding-left:max(40px,env(safe-area-inset-left));padding-right:max(40px,env(safe-area-inset-right))}
+  .reading-content{font-size:21px}.calendar-grid{gap:8px}.calendar-day{min-height:64px}
+}
+@media(max-width:420px){
+  .page-heading{flex-wrap:wrap}.editor-fields{grid-template-columns:minmax(0,1fr)}
+  .editor-bottom{flex-wrap:wrap}.calendar-jump{gap:8px}.calendar-day{min-height:48px}
+}

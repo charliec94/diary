@@ -134,7 +134,7 @@ async function openEditor(entry=null,section='journal',prompt='',chapter='',topi
 }
 function resizeWriting(){
   const field=$('#entry-content');
-  if(window.matchMedia('(max-width:700px)').matches){field.style.removeProperty('height');return;}
+  if(window.matchMedia('(max-width:700px), (any-pointer:coarse)').matches){field.style.removeProperty('height');return;}
   field.style.height='auto';field.style.height=field.scrollHeight+'px';
 }
 function wordCount(){resizeWriting();const value=$('#entry-content').value.trim();$('#word-count').textContent=`${value?value.split(/\s+/).length:0} words`;}
@@ -249,7 +249,9 @@ function mobileWritingFrame(){
   cancelAnimationFrame(mobileFrame);
   mobileFrame=requestAnimationFrame(()=>{
     const editor=$('#editor');
-    if(!editor.open||!window.matchMedia('(max-width:700px)').matches)return;
+    if(!editor.open)return;
+    resizeWriting();
+    if(!window.matchMedia('(max-width:700px), (any-pointer:coarse)').matches){editor.style.removeProperty('--writing-height');editor.style.removeProperty('--writing-top');return;}
     const viewport=window.visualViewport;
     editor.style.setProperty('--writing-height',(viewport?.height||window.innerHeight)+'px');
     editor.style.setProperty('--writing-top',(viewport?.offsetTop||0)+'px');
